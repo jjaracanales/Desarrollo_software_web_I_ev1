@@ -27,6 +27,14 @@ putenv('CACHE_DRIVER=array');
 putenv('SESSION_DRIVER=array');
 putenv('LOG_CHANNEL=stderr');
 
+// CRITICAL: Set Laravel cache paths to /tmp (writable in Vercel)
+putenv('VIEW_COMPILED_PATH=/tmp/views');
+putenv('APP_SERVICES_CACHE=/tmp/services.php');
+putenv('APP_PACKAGES_CACHE=/tmp/packages.php');
+putenv('APP_CONFIG_CACHE=/tmp/config.php');
+putenv('APP_ROUTES_CACHE=/tmp/routes.php');
+putenv('APP_EVENTS_CACHE=/tmp/events.php');
+
 // Set globals for Laravel
 $_ENV['APP_ENV'] = 'production';
 $_ENV['APP_DEBUG'] = 'true'; // Enable debug temporarily
@@ -37,29 +45,44 @@ $_ENV['DB_DATABASE'] = '/tmp/database.sqlite';
 // Create minimal database
 @touch('/tmp/database.sqlite');
 
-// Create ALL necessary directories BEFORE Laravel bootstrap
-$requiredDirs = [
-    __DIR__ . '/../bootstrap/cache',
-    __DIR__ . '/../storage/logs',
-    __DIR__ . '/../storage/framework/cache',
-    __DIR__ . '/../storage/framework/sessions',
-    __DIR__ . '/../storage/framework/views',
-    __DIR__ . '/../storage/framework/testing',
+// Create ALL necessary directories in /tmp (writable area)
+$writableDirs = [
+    '/tmp/bootstrap',
+    '/tmp/bootstrap/cache',
+    '/tmp/storage',
     '/tmp/storage/logs',
+    '/tmp/storage/framework',
     '/tmp/storage/framework/cache',
-    '/tmp/storage/framework/sessions', 
-    '/tmp/storage/framework/views'
+    '/tmp/storage/framework/sessions',
+    '/tmp/storage/framework/views',
+    '/tmp/views'
 ];
 
-foreach ($requiredDirs as $dir) {
+foreach ($writableDirs as $dir) {
     if (!is_dir($dir)) {
         @mkdir($dir, 0755, true);
     }
 }
 
+// Create symlinks from Laravel directories to writable /tmp directories
+$projectRoot = __DIR__ . '/..';
+$symlinks = [
+    $projectRoot . '/bootstrap/cache' => '/tmp/bootstrap/cache',
+    $projectRoot . '/storage/logs' => '/tmp/storage/logs',
+    $projectRoot . '/storage/framework/cache' => '/tmp/storage/framework/cache',
+    $projectRoot . '/storage/framework/sessions' => '/tmp/storage/framework/sessions',
+    $projectRoot . '/storage/framework/views' => '/tmp/storage/framework/views'
+];
+
+foreach ($symlinks as $link => $target) {
+    if (!file_exists($link) && !is_link($link)) {
+        @symlink($target, $link);
+    }
+}
+
 try {
-    // Bootstrap Laravel first
-    $app = require_once __DIR__.'/../bootstrap/app.php';
+    // Bootstrap Laravel
+    $app = require_once $projectRoot . '/bootstrap/app.php';
     
     if (!$app || !is_object($app)) {
         throw new Exception('Laravel app bootstrap failed');
