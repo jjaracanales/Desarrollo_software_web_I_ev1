@@ -31,6 +31,15 @@ $_ENV['DB_DATABASE'] = '/tmp/database.sqlite';
 // Create minimal database
 @touch('/tmp/database.sqlite');
 
+// Initialize database if not already done
+if (!file_exists('/tmp/db_initialized')) {
+    try {
+        include_once __DIR__ . '/../init-db.php';
+    } catch (Exception $e) {
+        error_log('Database initialization error: ' . $e->getMessage());
+    }
+}
+
 // Bootstrap Laravel
 $app = require_once __DIR__.'/../bootstrap/app.php';
 
