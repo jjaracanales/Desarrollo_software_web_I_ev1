@@ -17,10 +17,13 @@ if (!file_exists(__DIR__ . '/../vendor/autoload.php')) {
 // Register the Composer autoloader
 require __DIR__.'/../vendor/autoload.php';
 
+// Generate a proper Laravel application key (32 bytes for AES-256-CBC)
+$appKey = 'base64:' . base64_encode(random_bytes(32));
+
 // Set minimal environment for Vercel
 putenv('APP_ENV=production');
 putenv('APP_DEBUG=true'); // Enable debug temporarily
-putenv('APP_KEY=base64:' . base64_encode('desarrollo-software-web-i-ev1-key32'));
+putenv('APP_KEY=' . $appKey);
 putenv('DB_CONNECTION=sqlite');
 putenv('DB_DATABASE=/tmp/database.sqlite');
 putenv('CACHE_DRIVER=array');
@@ -38,7 +41,7 @@ putenv('APP_EVENTS_CACHE=/tmp/events.php');
 // Set globals for Laravel
 $_ENV['APP_ENV'] = 'production';
 $_ENV['APP_DEBUG'] = 'true'; // Enable debug temporarily
-$_ENV['APP_KEY'] = 'base64:' . base64_encode('desarrollo-software-web-i-ev1-key32');
+$_ENV['APP_KEY'] = $appKey;
 $_ENV['DB_CONNECTION'] = 'sqlite';
 $_ENV['DB_DATABASE'] = '/tmp/database.sqlite';
 
