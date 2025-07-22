@@ -47,6 +47,7 @@ $_ENV['DB_DATABASE'] = '/tmp/database.sqlite';
 
 // Create minimal database
 @touch('/tmp/database.sqlite');
+@chmod('/tmp/database.sqlite', 0666);
 
 // Create ALL necessary directories in /tmp (writable area)
 $writableDirs = [
@@ -91,21 +92,75 @@ try {
         throw new Exception('Laravel app bootstrap failed');
     }
 
-    // Initialize database AFTER Laravel is bootstrapped
-    if (!file_exists('/tmp/db_initialized')) {
+    // CRITICAL: Initialize database BEFORE handling any requests
+    if (!file_exists('/tmp/db_ready')) {
         try {
-            echo "<!-- Initializing database... -->";
+            echo "<!-- Inicializando base de datos... -->";
             
-            // Run migrations using the proper app instance
-            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+            // Check if database file exists and is writable
+            if (!file_exists('/tmp/database.sqlite')) {
+                touch('/tmp/database.sqlite');
+                chmod('/tmp/database.sqlite', 0666);
+            }
+            
+            // Run fresh migrations
+            \Illuminate\Support\Facades\Artisan::call('migrate:fresh', ['--force' => true]);
+            echo "<!-- Migraciones ejecutadas -->";
+            
+            // Run seeders
             \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'ProyectoSeeder', '--force' => true]);
+            echo "<!-- Seeders ejecutados -->";
             
-            // Create flag file
-            file_put_contents('/tmp/db_initialized', 'true');
-            echo "<!-- Database initialized -->";
+            // Verify table exists
+            $pdo = new PDO('sqlite:/tmp/database.sqlite');
+            $result = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='proyectos'");
+            if ($result && $result->fetch()) {
+                echo "<!-- Tabla proyectos verificada -->";
+                // Create ready flag
+                file_put_contents('/tmp/db_ready', 'true');
+            } else {
+                throw new Exception('Table proyectos was not created');
+            }
+            
         } catch (Exception $e) {
-            echo "<!-- Database initialization error: " . $e->getMessage() . " -->";
+            echo "<!-- Error en inicialización BD: " . $e->getMessage() . " -->";
             error_log('Database initialization error: ' . $e->getMessage());
+            
+            // Show detailed error for debugging
+            echo "<!-- Intentando recuperación de BD... -->";
+            try {
+                // Force create table if needed
+                $pdo = new PDO('sqlite:/tmp/database.sqlite');
+                $createTable = "
+                CREATE TABLE IF NOT EXISTS proyectos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre VARCHAR(255) NOT NULL,
+                    fecha_inicio DATE NOT NULL,
+                    estado VARCHAR(50) NOT NULL,
+                    responsable VARCHAR(255) NOT NULL,
+                    monto DECIMAL(15,2) NOT NULL,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP
+                )";
+                $pdo->exec($createTable);
+                echo "<!-- Tabla creada manualmente -->";
+                
+                // Insert sample data
+                $insertData = "
+                INSERT INTO proyectos (nombre, fecha_inicio, estado, responsable, monto, created_at, updated_at) VALUES 
+                ('Sistema de Gestión de Inventarios', '2025-01-15', 'En Progreso', 'Carlos Rodríguez', 15000000, datetime('now'), datetime('now')),
+                ('Plataforma E-commerce', '2025-02-01', 'Pendiente', 'Ana García', 25000000, datetime('now'), datetime('now')),
+                ('Aplicación Móvil de Delivery', '2025-01-20', 'En Progreso', 'Miguel Torres', 18000000, datetime('now'), datetime('now')),
+                ('Sistema de Facturación', '2025-02-10', 'Completado', 'Laura Sánchez', 12000000, datetime('now'), datetime('now')),
+                ('Portal Web Corporativo', '2025-01-25', 'Pendiente', 'Roberto Flores', 8000000, datetime('now'), datetime('now'))
+                ";
+                $pdo->exec($insertData);
+                echo "<!-- Datos insertados manualmente -->";
+                
+                file_put_contents('/tmp/db_ready', 'manual');
+            } catch (Exception $e2) {
+                echo "<!-- Error en recuperación: " . $e2->getMessage() . " -->";
+            }
         }
     }
 
