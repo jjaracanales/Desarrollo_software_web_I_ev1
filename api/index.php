@@ -21,12 +21,10 @@ $isVercel = isset($_ENV['VERCEL']) || isset($_SERVER['VERCEL']) ||
 // Configurar rutas según el entorno
 if ($isVercel) {
     // Configuración para Vercel (Linux)
-    $tempDir = '/tmp';
     $dbPath = '/tmp/database.sqlite';
     $storageBase = '/tmp';
 } else {
     // Configuración para desarrollo local (Windows/Linux/Mac)
-    $tempDir = sys_get_temp_dir();
     $dbPath = __DIR__ . '/../storage/database.sqlite';
     $storageBase = __DIR__ . '/../storage';
 }
@@ -51,52 +49,51 @@ putenv('CACHE_DRIVER=' . $_ENV['CACHE_DRIVER']);
 putenv('SESSION_DRIVER=cookie');
 putenv('LOG_CHANNEL=' . $_ENV['LOG_CHANNEL']);
 
-// Create database directory if needed
-$dbDir = dirname($dbPath);
-if (!is_dir($dbDir)) {
-    @mkdir($dbDir, 0755, true);
-}
-
-// Create SQLite database
-if (!file_exists($dbPath)) {
-    @touch($dbPath);
-    @chmod($dbPath, 0664);
-}
-
-// Create necessary directories
-$storageDirs = [
-    $storageBase . '/logs',
-    $storageBase . '/framework',
-    $storageBase . '/framework/cache',
-    $storageBase . '/framework/sessions',
-    $storageBase . '/framework/views',
-];
-
-// Solo crear directorios bootstrap/cache en Vercel
+// Solo ejecutar configuración de base de datos en Vercel
 if ($isVercel) {
-    $storageDirs[] = '/tmp/bootstrap';
-    $storageDirs[] = '/tmp/bootstrap/cache';
-}
+    // Create database directory if needed
+    $dbDir = dirname($dbPath);
+    if (!is_dir($dbDir)) {
+        @mkdir($dbDir, 0755, true);
+    }
 
-foreach ($storageDirs as $dir) {
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
+    // Create SQLite database
+    if (!file_exists($dbPath)) {
+        @touch($dbPath);
+        @chmod($dbPath, 0664);
+    }
+
+    // Create necessary directories
+    $storageDirs = [
+        '/tmp/storage/logs',
+        '/tmp/storage/framework/cache',
+        '/tmp/storage/framework/sessions',
+        '/tmp/storage/framework/views',
+        '/tmp/bootstrap/cache'
+    ];
+
+    foreach ($storageDirs as $dir) {
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
     }
 }
 
 // Bootstrap Laravel
 $app = require_once __DIR__.'/../bootstrap/app.php';
 
-// Initialize database (run once)
-static $initialized = false;
-if (!$initialized && file_exists($dbPath) && filesize($dbPath) === 0) {
-    try {
-        // Run migrations and seeders
-        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-        \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
-        $initialized = true;
-    } catch (Exception $e) {
-        error_log('Database setup error: ' . $e->getMessage());
+// Initialize database (solo en Vercel y si la DB está vacía)
+if ($isVercel) {
+    static $initialized = false;
+    if (!$initialized && file_exists($dbPath) && filesize($dbPath) === 0) {
+        try {
+            // Run migrations and seeders using Artisan facade
+            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'ProyectoSeeder', '--force' => true]);
+            $initialized = true;
+        } catch (Exception $e) {
+            error_log('Database setup error: ' . $e->getMessage());
+        }
     }
 }
 
