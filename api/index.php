@@ -37,26 +37,38 @@ $_ENV['DB_DATABASE'] = '/tmp/database.sqlite';
 // Create minimal database
 @touch('/tmp/database.sqlite');
 
-// Initialize database if not already done
-if (!file_exists('/tmp/db_initialized')) {
-    try {
-        echo "<!-- Initializing database... -->";
-        include_once __DIR__ . '/../init-db.php';
-        echo "<!-- Database initialized -->";
-    } catch (Exception $e) {
-        echo "<!-- Database initialization error: " . $e->getMessage() . " -->";
-        error_log('Database initialization error: ' . $e->getMessage());
-    }
-}
-
 try {
-    // Bootstrap Laravel
+    // Bootstrap Laravel first
     $app = require_once __DIR__.'/../bootstrap/app.php';
+    
+    if (!$app || !is_object($app)) {
+        throw new Exception('Laravel app bootstrap failed');
+    }
+
+    // Initialize database AFTER Laravel is bootstrapped
+    if (!file_exists('/tmp/db_initialized')) {
+        try {
+            echo "<!-- Initializing database... -->";
+            
+            // Run migrations using the proper app instance
+            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'ProyectoSeeder', '--force' => true]);
+            
+            // Create flag file
+            file_put_contents('/tmp/db_initialized', 'true');
+            echo "<!-- Database initialized -->";
+        } catch (Exception $e) {
+            echo "<!-- Database initialization error: " . $e->getMessage() . " -->";
+            error_log('Database initialization error: ' . $e->getMessage());
+        }
+    }
 
     // Handle the request
     $app->handleRequest(Request::capture());
+    
 } catch (Exception $e) {
     echo "Error starting Laravel: " . $e->getMessage();
     echo "\nFile: " . $e->getFile();
     echo "\nLine: " . $e->getLine();
+    echo "\nTrace: " . $e->getTraceAsString();
 } 
