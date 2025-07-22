@@ -37,6 +37,26 @@ $_ENV['DB_DATABASE'] = '/tmp/database.sqlite';
 // Create minimal database
 @touch('/tmp/database.sqlite');
 
+// Create ALL necessary directories BEFORE Laravel bootstrap
+$requiredDirs = [
+    __DIR__ . '/../bootstrap/cache',
+    __DIR__ . '/../storage/logs',
+    __DIR__ . '/../storage/framework/cache',
+    __DIR__ . '/../storage/framework/sessions',
+    __DIR__ . '/../storage/framework/views',
+    __DIR__ . '/../storage/framework/testing',
+    '/tmp/storage/logs',
+    '/tmp/storage/framework/cache',
+    '/tmp/storage/framework/sessions', 
+    '/tmp/storage/framework/views'
+];
+
+foreach ($requiredDirs as $dir) {
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+}
+
 try {
     // Bootstrap Laravel first
     $app = require_once __DIR__.'/../bootstrap/app.php';
