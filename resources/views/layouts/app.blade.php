@@ -379,7 +379,8 @@
             <div style="display: flex; justify-content: space-between; align-items: center; height: 100%; padding: 0 32px;">
                 <div class="logo-container">
                     <a href="{{ route('proyectos.index') }}" style="color: white; text-decoration: none; display: flex; align-items: center;">
-                        <img src="{{ asset('logo.png') }}" alt="Tech Solutions" style="height: 50px;">
+                        <img src="/logo.png" alt="Tech Solutions" style="height: 50px; margin-right: 12px;">
+                        <span style="font-size: 20px; font-weight: 600; color: white;"></span>
                     </a>
                 </div>
                 <div style="display: flex; gap: 20px;">
