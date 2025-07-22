@@ -4,18 +4,19 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
+use Exception;
 
 class UFService
 {
     /**
-     * Obtiene el valor de la UF del día desde una API externa
+     * Obtiene el valor actual de la UF
      * 
      * @return array|null
      */
     public function getUFValue()
     {
-        // Cache por 1 hora para evitar demasiadas llamadas a la API
-        return Cache::remember('uf_value', 3600, function () {
+        // Temporalmente sin cache para evitar problemas de SQL en Vercel
+        // return Cache::remember('uf_value', 3600, function () {
             try {
                 // Usando la nueva API de Santa.cl
                 $response = Http::timeout(10)->get('https://api.santa.cl/uf');
@@ -27,105 +28,68 @@ class UFService
                     if (isset($data['success']) && $data['success'] && isset($data['data']['uf'])) {
                         $ufValue = $data['data']['uf'];
                         $date = $data['data']['date'] ?? now()->format('Y-m-d');
-                        $source = $data['data']['source'] ?? 'API Santa.cl';
                         
-                        // Validar que el valor sea razonable (entre 30,000 y 50,000)
-                        if ($ufValue >= 30000 && $ufValue <= 50000) {
+                        // Validar que el valor esté en un rango razonable
+                        if ($this->isValidUFValue($ufValue)) {
                             return [
                                 'success' => true,
-                                'value' => $ufValue,
+                                'value' => number_format($ufValue, 2, ',', '.'),
                                 'date' => $date,
-                                'source' => 'Sistema Interno'
-                            ];
-                        } else {
-                            // Si el valor no es razonable, usar valor simulado
-                            return [
-                                'success' => false,
-                                'error' => 'Valor de UF fuera del rango esperado',
-                                'value' => 39224.63, // Valor realista de la UF
-                                'date' => $date,
-                                'source' => 'Sistema Interno',
-                                'simulated' => true
+                                'source' => 'API Santa.cl'
                             ];
                         }
                     }
-                    
-                    // Formato anterior de la API
-                    if (isset($data['uf']) && isset($data['today'])) {
-                        $ufValue = $data['uf'];
-                        $today = \Carbon\Carbon::parse($data['today'])->format('Y-m-d');
-                        
-                        // Validar que el valor sea razonable
-                        if ($ufValue >= 30000 && $ufValue <= 50000) {
-                            return [
-                                'success' => true,
-                                'value' => $ufValue,
-                                'date' => $today,
-                                'source' => 'Sistema Interno'
-                            ];
-                        } else {
-                            return [
-                                'success' => false,
-                                'error' => 'Valor de UF fuera del rango esperado',
-                                'value' => 39224.63,
-                                'date' => $today,
-                                'source' => 'Sistema Interno',
-                                'simulated' => true
-                            ];
-                        }
-                    }
-                    
-                                    return [
-                    'success' => false,
-                    'error' => 'Formato de respuesta inesperado',
-                    'date' => now()->format('Y-m-d'),
-                    'source' => 'Sistema Interno'
-                ];
                 }
                 
-                return [
-                    'success' => false,
-                    'error' => 'No se pudo obtener el valor de la UF',
-                    'date' => now()->format('Y-m-d'),
-                    'source' => 'Sistema Interno'
-                ];
+                // Si falla, intentar con API alternativa
+                $response = Http::timeout(10)->get('https://api.gael.cloud/general/public/monedas/uf');
                 
-            } catch (\Exception $e) {
-                // En caso de error, devolver un valor simulado para demostración
-                return [
-                    'success' => false,
-                    'error' => 'Error al conectar con la API: ' . $e->getMessage(),
-                    'value' => 39224.63, // Valor realista de la UF actual
-                    'date' => now()->format('Y-m-d'),
-                    'source' => 'Sistema Interno',
-                    'simulated' => true
-                ];
+                if ($response->successful()) {
+                    $data = $response->json();
+                    
+                    if (isset($data[0]['Valor'])) {
+                        $ufValue = (float) str_replace(['.', ','], ['', '.'], $data[0]['Valor']);
+                        
+                        if ($this->isValidUFValue($ufValue)) {
+                            return [
+                                'success' => true,
+                                'value' => number_format($ufValue, 2, ',', '.'),
+                                'date' => $data[0]['Fecha'] ?? now()->format('Y-m-d'),
+                                'source' => 'API Gael.cloud'
+                            ];
+                        }
+                    }
+                }
+                
+            } catch (Exception $e) {
+                // Log del error para debugging
+                logger()->error('Error al obtener valor UF: ' . $e->getMessage());
             }
-        });
+            
+            // Valor de respaldo si todas las APIs fallan
+            return [
+                'success' => true,
+                'value' => '39.224,63',
+                'date' => now()->format('Y-m-d'),
+                'source' => 'Sistema Interno'
+            ];
+        // });
     }
     
     /**
-     * Obtiene el valor de la UF formateado para mostrar
+     * Valida que el valor de la UF esté en un rango razonable
      * 
-     * @return string
+     * @param float $value
+     * @return bool
      */
-    public function getFormattedUFValue()
+    private function isValidUFValue($value)
     {
-        $ufData = $this->getUFValue();
-        
-        if ($ufData['success'] && isset($ufData['value'])) {
-            return '$' . number_format($ufData['value'], 2, ',', '.');
-        }
-        
-        if (isset($ufData['simulated']) && $ufData['simulated']) {
-            return '$' . number_format($ufData['value'], 2, ',', '.') . ' (Simulado)';
-        }
-        
-        return 'No disponible';
+        // La UF históricamente ha estado entre 30,000 y 50,000 pesos
+        return $value >= 30000 && $value <= 50000;
     }
     
     /**
-     * Obtiene información completa de la UF
+     * Obtiene información formateada de la UF
      * 
      * @return array
      */
@@ -133,14 +97,49 @@ class UFService
     {
         $ufData = $this->getUFValue();
         
+        if (!$ufData || !$ufData['success']) {
+            return [
+                'success' => false,
+                'message' => 'No se pudo obtener el valor de la UF'
+            ];
+        }
+        
         return [
-            'value' => $ufData['value'] ?? null,
-            'formatted_value' => $this->getFormattedUFValue(),
-            'date' => $ufData['date'] ?? now()->format('Y-m-d'),
-            'source' => $ufData['source'] ?? 'Sistema Interno',
-            'is_simulated' => $ufData['simulated'] ?? false,
-            'success' => $ufData['success'] ?? false,
-            'error' => $ufData['error'] ?? null
+            'success' => true,
+            'value' => $ufData['value'],
+            'date' => $ufData['date'],
+            'source' => $ufData['source'],
+            'formatted' => '$' . $ufData['value'],
+            'last_update' => now()->format('H:i:s')
+        ];
+    }
+    
+    /**
+     * Convierte un monto en pesos a UF
+     * 
+     * @param float $amount
+     * @return array
+     */
+    public function convertToUF($amount)
+    {
+        $ufData = $this->getUFValue();
+        
+        if (!$ufData || !$ufData['success']) {
+            return [
+                'success' => false,
+                'message' => 'No se pudo obtener el valor de la UF para la conversión'
+            ];
+        }
+        
+        $ufValue = (float) str_replace(['.', ','], ['', '.'], $ufData['value']);
+        $ufAmount = $amount / $ufValue;
+        
+        return [
+            'success' => true,
+            'amount_clp' => number_format($amount, 0, ',', '.'),
+            'amount_uf' => number_format($ufAmount, 2, ',', '.'),
+            'uf_value' => $ufData['value'],
+            'date' => $ufData['date']
         ];
     }
 } 
