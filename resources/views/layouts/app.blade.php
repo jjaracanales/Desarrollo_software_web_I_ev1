@@ -379,8 +379,10 @@
             <div style="display: flex; justify-content: space-between; align-items: center; height: 100%; padding: 0 32px;">
                 <div class="logo-container">
                     <a href="{{ route('proyectos.index') }}" style="color: white; text-decoration: none; display: flex; align-items: center;">
-                        <img src="/logo.png" alt="Tech Solutions" style="height: 50px; margin-right: 12px;">
-                        <span style="font-size: 20px; font-weight: 600; color: white;"></span>
+                        <span style="font-size: 24px; font-weight: 700; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                            <i class="fas fa-project-diagram" style="margin-right: 8px; color: #1890ff;"></i>
+                            Proyectos Tech Solutions
+                        </span>
                     </a>
                 </div>
                 <div style="display: flex; gap: 20px;">
