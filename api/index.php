@@ -4,10 +4,6 @@ use Illuminate\Http\Request;
 
 define('LARAVEL_START', microtime(true));
 
-// Enable error reporting for debugging
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 // Check if vendor directory exists
 if (!file_exists(__DIR__ . '/../vendor/autoload.php')) {
     http_response_code(503);
@@ -22,7 +18,7 @@ $appKey = 'base64:' . base64_encode(random_bytes(32));
 
 // Set minimal environment for Vercel
 putenv('APP_ENV=production');
-putenv('APP_DEBUG=true'); // Enable debug temporarily
+putenv('APP_DEBUG=false'); // Disable debug in production
 putenv('APP_KEY=' . $appKey);
 putenv('DB_CONNECTION=sqlite');
 putenv('DB_DATABASE=/tmp/database.sqlite');
@@ -40,7 +36,7 @@ putenv('APP_EVENTS_CACHE=/tmp/events.php');
 
 // Set globals for Laravel
 $_ENV['APP_ENV'] = 'production';
-$_ENV['APP_DEBUG'] = 'true'; // Enable debug temporarily
+$_ENV['APP_DEBUG'] = 'false'; // Disable debug in production
 $_ENV['APP_KEY'] = $appKey;
 $_ENV['DB_CONNECTION'] = 'sqlite';
 $_ENV['DB_DATABASE'] = '/tmp/database.sqlite';
@@ -96,8 +92,6 @@ try {
     // CRITICAL: Initialize database BEFORE handling any requests
     if (!file_exists('/tmp/db_ready')) {
         try {
-            echo "<!-- Inicializando base de datos completa... -->";
-            
             // Check if database file exists and is writable
             if (!file_exists('/tmp/database.sqlite')) {
                 touch('/tmp/database.sqlite');
@@ -106,11 +100,9 @@ try {
             
             // Run ALL migrations (including cache, jobs, etc.)
             \Illuminate\Support\Facades\Artisan::call('migrate:fresh', ['--force' => true]);
-            echo "<!-- Todas las migraciones ejecutadas -->";
             
             // Run seeders
             \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'ProyectoSeeder', '--force' => true]);
-            echo "<!-- Seeders ejecutados -->";
             
             // Verify tables exist
             $pdo = new PDO('sqlite:/tmp/database.sqlite');
@@ -120,26 +112,21 @@ try {
             foreach ($tables as $table) {
                 $result = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'");
                 if (!$result || !$result->fetch()) {
-                    echo "<!-- Tabla $table no encontrada -->";
                     $allTablesExist = false;
                 }
             }
             
             if ($allTablesExist) {
-                echo "<!-- Todas las tablas verificadas -->";
                 file_put_contents('/tmp/db_ready', 'complete');
             } else {
                 throw new Exception('Some required tables were not created');
             }
             
         } catch (Exception $e) {
-            echo "<!-- Error en inicialización BD: " . $e->getMessage() . " -->";
             error_log('Database initialization error: ' . $e->getMessage());
             
-            // Show detailed error for debugging
-            echo "<!-- Intentando recuperación de BD... -->";
+            // Force create tables if needed
             try {
-                // Force create tables if needed
                 $pdo = new PDO('sqlite:/tmp/database.sqlite');
                 
                 // Create proyectos table
@@ -179,8 +166,6 @@ try {
                 )";
                 $pdo->exec($createUsers);
                 
-                echo "<!-- Tablas creadas manualmente -->";
-                
                 // Insert sample data
                 $insertData = "
                 INSERT OR IGNORE INTO proyectos (nombre, fecha_inicio, estado, responsable, monto, created_at, updated_at) VALUES 
@@ -191,11 +176,10 @@ try {
                 ('Portal Web Corporativo', '2025-01-25', 'Pendiente', 'Roberto Flores', 8000000, datetime('now'), datetime('now'))
                 ";
                 $pdo->exec($insertData);
-                echo "<!-- Datos insertados manualmente -->";
                 
                 file_put_contents('/tmp/db_ready', 'manual');
             } catch (Exception $e2) {
-                echo "<!-- Error en recuperación: " . $e2->getMessage() . " -->";
+                error_log('Manual database creation error: ' . $e2->getMessage());
             }
         }
     }
@@ -204,8 +188,7 @@ try {
     $app->handleRequest(Request::capture());
     
 } catch (Exception $e) {
-    echo "Error starting Laravel: " . $e->getMessage();
-    echo "\nFile: " . $e->getFile();
-    echo "\nLine: " . $e->getLine();
-    echo "\nTrace: " . $e->getTraceAsString();
+    http_response_code(500);
+    error_log('Laravel startup error: ' . $e->getMessage());
+    exit('Error interno del servidor');
 } 

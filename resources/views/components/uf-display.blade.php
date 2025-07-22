@@ -14,33 +14,43 @@
         </div>
     </div>
     <div class="ant-card-body" style="text-align: center; background: linear-gradient(135deg, #fafcff 0%, #f0f8ff 100%);">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-            <div>
-                <div class="ant-statistic" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border: 1px solid #e6f7ff; border-radius: 12px; padding: 20px;">
-                    <div class="ant-statistic-content" style="color: #1890ff; font-size: 24px; margin-bottom: 8px; font-weight: 700; text-shadow: 0 2px 4px rgba(24, 144, 255, 0.1);">
-                        {{ $ufInfo['formatted_value'] }}
-                    </div>
-                    <div class="ant-statistic-title" style="font-size: 13px; color: rgba(0, 0, 0, 0.65);">
-                        <i class="fas fa-calendar" style="margin-right: 6px; color: #1890ff;"></i>
-                        {{ \Carbon\Carbon::parse($ufInfo['date'])->format('d/m/Y') }}
+        @if($ufInfo['success'])
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div>
+                    <div class="ant-statistic" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border: 1px solid #e6f7ff; border-radius: 12px; padding: 20px;">
+                        <div class="ant-statistic-content" style="color: #1890ff; font-size: 24px; margin-bottom: 8px; font-weight: 700; text-shadow: 0 2px 4px rgba(24, 144, 255, 0.1);">
+                            ${{ $ufInfo['value'] }}
+                        </div>
+                        <div class="ant-statistic-title" style="font-size: 13px; color: rgba(0, 0, 0, 0.65);">
+                            <i class="fas fa-calendar" style="margin-right: 6px; color: #1890ff;"></i>
+                            {{ \Carbon\Carbon::parse($ufInfo['date'])->format('d/m/Y') }}
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div>
-                <div style="display: flex; flex-direction: column; gap: 8px; background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border: 1px solid #e6f7ff; border-radius: 12px; padding: 16px;">
-                    <small style="color: rgba(0, 0, 0, 0.65); font-weight: 500;">
-                        <i class="fas fa-calendar" style="margin-right: 6px; color: #1890ff;"></i>
-                        Actualizado hoy
-                    </small>
-                    @if($ufInfo['is_simulated'])
-                        <small style="color: #faad14; font-weight: 500;">
-                            <i class="fas fa-info-circle" style="margin-right: 6px;"></i>
-                            Valor de referencia
+                <div>
+                    <div style="display: flex; flex-direction: column; gap: 8px; background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border: 1px solid #e6f7ff; border-radius: 12px; padding: 16px;">
+                        <small style="color: rgba(0, 0, 0, 0.65); font-weight: 500;">
+                            <i class="fas fa-clock" style="margin-right: 6px; color: #1890ff;"></i>
+                            Actualizado: {{ $ufInfo['last_update'] }}
                         </small>
-                    @endif
+                        <small style="color: rgba(0, 0, 0, 0.65); font-weight: 500;">
+                            <i class="fas fa-server" style="margin-right: 6px; color: #52c41a;"></i>
+                            Fuente: {{ $ufInfo['source'] }}
+                        </small>
+                    </div>
                 </div>
             </div>
-        </div>
+        @else
+            <div style="padding: 20px; text-align: center;">
+                <div style="color: #ff4d4f; font-size: 16px; margin-bottom: 10px;">
+                    <i class="fas fa-exclamation-triangle" style="margin-right: 8px;"></i>
+                    No se pudo obtener el valor de la UF
+                </div>
+                <small style="color: rgba(0, 0, 0, 0.65);">
+                    {{ $ufInfo['message'] ?? 'Error desconocido' }}
+                </small>
+            </div>
+        @endif
         
         @if(isset($showRefresh) && $showRefresh)
             <div>
