@@ -26,7 +26,7 @@ putenv('APP_DEBUG=true'); // Enable debug temporarily
 putenv('APP_KEY=' . $appKey);
 putenv('DB_CONNECTION=sqlite');
 putenv('DB_DATABASE=/tmp/database.sqlite');
-putenv('CACHE_DRIVER=array');
+putenv('CACHE_DRIVER=array'); // Use array cache to avoid database cache issues
 putenv('SESSION_DRIVER=array');
 putenv('LOG_CHANNEL=stderr');
 
@@ -44,6 +44,7 @@ $_ENV['APP_DEBUG'] = 'true'; // Enable debug temporarily
 $_ENV['APP_KEY'] = $appKey;
 $_ENV['DB_CONNECTION'] = 'sqlite';
 $_ENV['DB_DATABASE'] = '/tmp/database.sqlite';
+$_ENV['CACHE_DRIVER'] = 'array'; // Ensure array cache
 
 // Create minimal database
 @touch('/tmp/database.sqlite');
@@ -95,7 +96,7 @@ try {
     // CRITICAL: Initialize database BEFORE handling any requests
     if (!file_exists('/tmp/db_ready')) {
         try {
-            echo "<!-- Inicializando base de datos... -->";
+            echo "<!-- Inicializando base de datos completa... -->";
             
             // Check if database file exists and is writable
             if (!file_exists('/tmp/database.sqlite')) {
@@ -103,23 +104,32 @@ try {
                 chmod('/tmp/database.sqlite', 0666);
             }
             
-            // Run fresh migrations
+            // Run ALL migrations (including cache, jobs, etc.)
             \Illuminate\Support\Facades\Artisan::call('migrate:fresh', ['--force' => true]);
-            echo "<!-- Migraciones ejecutadas -->";
+            echo "<!-- Todas las migraciones ejecutadas -->";
             
             // Run seeders
             \Illuminate\Support\Facades\Artisan::call('db:seed', ['--class' => 'ProyectoSeeder', '--force' => true]);
             echo "<!-- Seeders ejecutados -->";
             
-            // Verify table exists
+            // Verify tables exist
             $pdo = new PDO('sqlite:/tmp/database.sqlite');
-            $result = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='proyectos'");
-            if ($result && $result->fetch()) {
-                echo "<!-- Tabla proyectos verificada -->";
-                // Create ready flag
-                file_put_contents('/tmp/db_ready', 'true');
+            $tables = ['proyectos', 'cache', 'jobs', 'users'];
+            $allTablesExist = true;
+            
+            foreach ($tables as $table) {
+                $result = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'");
+                if (!$result || !$result->fetch()) {
+                    echo "<!-- Tabla $table no encontrada -->";
+                    $allTablesExist = false;
+                }
+            }
+            
+            if ($allTablesExist) {
+                echo "<!-- Todas las tablas verificadas -->";
+                file_put_contents('/tmp/db_ready', 'complete');
             } else {
-                throw new Exception('Table proyectos was not created');
+                throw new Exception('Some required tables were not created');
             }
             
         } catch (Exception $e) {
@@ -129,9 +139,11 @@ try {
             // Show detailed error for debugging
             echo "<!-- Intentando recuperación de BD... -->";
             try {
-                // Force create table if needed
+                // Force create tables if needed
                 $pdo = new PDO('sqlite:/tmp/database.sqlite');
-                $createTable = "
+                
+                // Create proyectos table
+                $createProyectos = "
                 CREATE TABLE IF NOT EXISTS proyectos (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     nombre VARCHAR(255) NOT NULL,
@@ -142,12 +154,36 @@ try {
                     created_at TIMESTAMP,
                     updated_at TIMESTAMP
                 )";
-                $pdo->exec($createTable);
-                echo "<!-- Tabla creada manualmente -->";
+                $pdo->exec($createProyectos);
+                
+                // Create cache table
+                $createCache = "
+                CREATE TABLE IF NOT EXISTS cache (
+                    key VARCHAR(255) PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    expiration INTEGER NOT NULL
+                )";
+                $pdo->exec($createCache);
+                
+                // Create users table
+                $createUsers = "
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    email_verified_at TIMESTAMP NULL,
+                    password VARCHAR(255) NOT NULL,
+                    remember_token VARCHAR(100) NULL,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP
+                )";
+                $pdo->exec($createUsers);
+                
+                echo "<!-- Tablas creadas manualmente -->";
                 
                 // Insert sample data
                 $insertData = "
-                INSERT INTO proyectos (nombre, fecha_inicio, estado, responsable, monto, created_at, updated_at) VALUES 
+                INSERT OR IGNORE INTO proyectos (nombre, fecha_inicio, estado, responsable, monto, created_at, updated_at) VALUES 
                 ('Sistema de Gestión de Inventarios', '2025-01-15', 'En Progreso', 'Carlos Rodríguez', 15000000, datetime('now'), datetime('now')),
                 ('Plataforma E-commerce', '2025-02-01', 'Pendiente', 'Ana García', 25000000, datetime('now'), datetime('now')),
                 ('Aplicación Móvil de Delivery', '2025-01-20', 'En Progreso', 'Miguel Torres', 18000000, datetime('now'), datetime('now')),
